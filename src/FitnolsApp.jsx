@@ -1,6 +1,8 @@
 import React from "react";
 import { useState } from "react";
 
+// Completed version 1.0.0
+
 // Fixed FITNOLS React preview with bug corrections
 
 const MUSCLES = [
