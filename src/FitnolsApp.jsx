@@ -1,3 +1,4 @@
+import React from "react";
 import { useState } from "react";
 
 // Fixed FITNOLS React preview with bug corrections
