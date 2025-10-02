@@ -1,31 +1,93 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 
-/* -------------------- utils -------------------- */
+// --- Utilities ---
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-/* ------------------ constants ------------------ */
+// --- Constants ---
 const MUSCLES = [
-  "Chest",
-  "Back",
-  "Legs",
+  "Face",
+  "Neck",
   "Shoulders",
+
   "Arms",
+  "Biceps",
+  "Triceps",
+
+  "Forearms",
+  "Wrist",
+  "Hands",
+
+  "Chest",
   "Core",
+  "Obliques",
+  "Back",
+
+  "Pelvis",
+  "Legs",
+  "Butt",
+
+  "Ankles",
+
   "Full Body",
+  "Full Body Lower",
+  "Full Body Upper",
 ];
 const EXERCISE_MAP = {
-  Chest: ["Bench Press", "Incline DB Press", "Cable Fly"],
-  Back: ["Deadlift", "Lat Pulldown", "Row"],
-  Legs: ["Squat", "Leg Press", "Leg Curl", "Calf Raise"],
+  Face: ["Smile", "Frown", "Squint", "Blink"],
+  Neck: [
+    "Neck Flexion",
+    "Neck Extension",
+    "Neck Lateral Flexion",
+    "Neck Lateral Extension",
+  ],
   Shoulders: ["Overhead Press", "Lateral Raise", "Rear Delt Fly"],
-  Arms: ["Barbell Curl", "Tricep Pushdown", "Hammer Curl"],
-  Core: ["Hanging Leg Raise", "Plank", "Cable Crunch"],
-  "Full Body": ["Clean & Press", "Farmer Carry", "Kettlebell Swing"],
-};
 
-/* -------- attached dropdown (anchored) -------- */
+  Arms: ["Barbell Curl", "Tricep Pushdown", "Hammer Curl"],
+  Biceps: ["Barbell Curl", "Tricep Pushdown", "Hammer Curl"],
+  Triceps: ["Tricep Pushdown", "Tricep Extension", "Tricep Pushdown"],
+
+  Forearms: ["Forearm Curl", "Forearm Extension", "Forearm Curl"],
+  Wrist: [
+    "Wrist Flexion",
+    "Wrist Extension",
+    "Wrist Lateral Flexion",
+    "Wrist Lateral Extension",
+  ],
+  Hands: ["Hand Grip", "Hand Release", "Hand Squeeze", "Hand Open"],
+
+  Chest: ["Bench Press", "Incline DB Press", "Cable Fly"],
+  Core: ["Hanging Leg Raise", "Plank", "Cable Crunch"],
+  Obliques: ["Oblique Twist", "Oblique Crunch", "Oblique Lateral Twist"],
+  Back: ["Deadlift", "Lat Pulldown", "Row"],
+
+  Pelvis: [
+    "Hip Flexion",
+    "Hip Extension",
+    "Hip Lateral Flexion",
+    "Hip Lateral Extension",
+  ],
+  Legs: ["Squat", "Leg Press", "Leg Curl", "Calf Raise"],
+  Butt: ["Glute Bridge", "Hip Thrust", "Leg Raise"],
+
+  Ankles: [
+    "Ankle Flexion",
+    "Ankle Extension",
+    "Ankle Lateral Flexion",
+    "Ankle Lateral Extension",
+  ],
+  "Full Body": ["Clean & Press", "Farmer Carry", "Kettlebell Swing"],
+  "Full Body Lower": ["Clean & Press", "Farmer Carry", "Kettlebell Swing"],
+  "Full Body Upper": ["Clean & Press", "Farmer Carry", "Kettlebell Swing"],
+};
+const SETS_OPTIONS = Array.from({ length: 8 }, (_, i) => i + 1);
+const REPS_OPTIONS = Array.from({ length: 20 }, (_, i) => i + 1);
+const WEIGHT_OPTIONS = [
+  0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100,
+];
+
+// ---- Attached Dropdown (anchored to its card) ----
 function AttachedDropdown({
   label,
   buttonContent,
@@ -52,12 +114,9 @@ function AttachedDropdown({
         <span className="truncate">{buttonContent ?? label}</span>
         <span className={`transition ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
-
       {open && (
         <div
-          className={`absolute ${
-            align === "right" ? "right-0" : "left-0"
-          } top-full mt-2 min-w-[240px] rounded-xl border border-sky-900/60 bg-slate-950/95 p-3 shadow-[0_0_40px_rgba(0,160,255,.45)] z-50 custom-scrollbar`}
+          className={`absolute left-0 top-full mt-3 w-[calc(100%)] max-h-[360px] overflow-auto rounded-2xl ring-1 ring-sky-800/60 bg-[rgba(6,12,24,0.96)] backdrop-blur-md p-2 shadow-[0_20px_80px_rgba(0,160,255,.25)] z-50 custom-scrollbar`}
           onMouseLeave={close}
         >
           {children}
@@ -67,48 +126,45 @@ function AttachedDropdown({
   );
 }
 
-/* ------------- stepper (±2.5, editable) ------------- */
+// ---- Number Stepper (± step, editable center) ----
 function Stepper({ value, setValue, step = 2.5, suffix = "" }) {
   const [text, setText] = useState(String(value));
-  useEffect(() => setText(String(value)), [value]);
-
+  useEffect(() => {
+    setText(String(value));
+  }, [value]);
   const commit = () => {
     const n = parseFloat(text);
     if (!Number.isNaN(n)) setValue(n);
     else setText(String(value));
   };
-
   const inc = () => setValue((v) => +((v ?? 0) + step).toFixed(2));
   const dec = () => setValue((v) => +((v ?? 0) - step).toFixed(2));
-
   return (
     <div className="flex items-center gap-3">
       <button
         onClick={dec}
         className="h-10 w-10 rounded-xl border border-sky-800/60 bg-slate-900/70 text-xl text-sky-200 hover:bg-slate-900"
-        aria-label="decrease"
       >
         −
       </button>
-
       <div className="flex items-center gap-2 rounded-xl border border-sky-700/60 bg-slate-900/70 px-3 py-2">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={commit}
           onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Enter") {
+              e.currentTarget.blur();
+            }
           }}
           className="w-24 bg-transparent text-center text-lg text-sky-100 focus:outline-none"
           inputMode="decimal"
         />
-        {suffix ? <span className="text-sky-300/80">{suffix}</span> : null}
+        {suffix && <span className="text-sky-300/80">{suffix}</span>}
       </div>
-
       <button
         onClick={inc}
         className="h-10 w-10 rounded-xl border border-sky-800/60 bg-slate-900/70 text-xl text-sky-200 hover:bg-slate-900"
-        aria-label="increase"
       >
         ＋
       </button>
@@ -116,22 +172,58 @@ function Stepper({ value, setValue, step = 2.5, suffix = "" }) {
   );
 }
 
-/* -------------------- app -------------------- */
+// --- Main App ---
 export default function FitnolsApp() {
-  // selections
+  // Selections for the field cards
   const [muscle, setMuscle] = useState("Legs");
-  const [exercise, setExercise] = useState(EXERCISE_MAP["Legs"][0]);
+  const [exercise, setExercise] = useState(EXERCISE_MAP["Legs"]?.[0] ?? "");
   const [sets, setSets] = useState(3);
   const [reps, setReps] = useState(10);
   const [weight, setWeight] = useState(60);
 
-  // raise z-index of the card while its dropdown is open
-  const [zLift, setZLift] = useState({});
-  const setLift = (key) => (open) => setZLift((p) => ({ ...p, [key]: open }));
+  // Toolbar & Live logging state
+  const [liveMode, setLiveMode] = useState(true);
+  const [layoutMode, setLayoutMode] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const fileRef = useRef(null);
+  const onPickAvatar = (e) => {
+    const f = e.target.files?.[0];
+    if (f) setAvatarUrl(URL.createObjectURL(f));
+  };
 
-  // sample history
+  // Live logging state
+  const [liveReps, setLiveReps] = useState(10);
+  const [liveLog, setLiveLog] = useState({}); // { [exerciseName]: number[] }
+  const addLiveRep = () => {
+    if (!exercise) return;
+    setLiveLog((prev) => {
+      const list = prev[exercise] ?? [];
+      return { ...prev, [exercise]: [...list, Number(liveReps)] };
+    });
+  };
+  const addToLog = () => {
+    if (!exercise) return;
+    const entry = {
+      date: todayKey,
+      muscle,
+      exercise,
+      sets: Math.max(1, Math.round(Number(sets) || 0)),
+      reps: Number(liveReps) || 0,
+      weight: Number(weight) || 0,
+      unit: "kg",
+      notes: "",
+    };
+    setHistory((prev) => [...prev, entry]);
+  };
+
+  // z-index lift when a dropdown is open so it overlays neighbors
+  const [zLift, setZLift] = useState({}); // { cardKey: boolean }
+  const setLift = (key) => (open) =>
+    setZLift((prev) => ({ ...prev, [key]: open }));
+
+  // History (sample)
   const todayKey = useMemo(today, []);
-  const [history] = useState(() => [
+  const [history, setHistory] = useState(() => [
     {
       date: todayKey,
       muscle: "Legs",
@@ -156,7 +248,6 @@ export default function FitnolsApp() {
 
   return (
     <div className="min-h-screen w-full bg-[radial-gradient(120%_120%_at_50%_-20%,#0b1222,#050b16)] text-slate-100 antialiased">
-      {/* neon scrollbar for dropdowns */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 8px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -175,16 +266,57 @@ export default function FitnolsApp() {
         }
       `}</style>
 
-      <header className="text-center py-6">
-        <h1 className="text-4xl font-extrabold text-sky-200 drop-shadow-[0_0_25px_rgba(0,140,255,.4)]">
-          FITNOLS
-        </h1>
+      <header className="py-6">
+        <div className="relative mx-auto w-full max-w-6xl px-4">
+          <h1 className="text-center text-4xl font-extrabold text-sky-200 drop-shadow-[0_0_25px_rgba(0,140,255,.4)]">
+            FITNOLS
+          </h1>
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-3">
+            <button
+              onClick={() => setLiveMode((v) => !v)}
+              title={liveMode ? "Live logging: on" : "Live logging: off"}
+              className={`h-11 w-11 rounded-2xl ${
+                liveMode ? "bg-emerald-400" : "bg-slate-300"
+              } text-slate-900 font-semibold shadow`}
+            >
+              ⏺
+            </button>
+            <button
+              onClick={() => setLayoutMode((v) => !v)}
+              title={layoutMode ? "Layout mode: on" : "Layout mode: off"}
+              className={`h-11 w-11 rounded-2xl ${
+                layoutMode ? "bg-sky-400" : "bg-slate-300"
+              } text-slate-900 font-semibold shadow`}
+            >
+              ▦
+            </button>
+            <button
+              onClick={() => fileRef.current?.click()}
+              title="Set profile picture"
+              className="h-11 w-11 rounded-2xl bg-slate-300 overflow-hidden shadow"
+            >
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="avatar"
+                  className="h-full w-full object-cover"
+                />
+              ) : null}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onPickAvatar}
+            />
+          </div>
+        </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 pb-20 space-y-4">
-        {/* row 1 */}
         <section className="grid gap-4 md:grid-cols-12">
-          {/* Muscle */}
+          {/* MUSCLE card */}
           <div
             className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4"
             style={{ zIndex: zLift.muscle ? 1000 : 1 }}
@@ -194,16 +326,18 @@ export default function FitnolsApp() {
               buttonContent={<span>{muscle}</span>}
               onOpenChange={setLift("muscle")}
             >
-              <div className="max-h-56 overflow-auto custom-scrollbar">
+              <div className="max-h-[320px] overflow-auto custom-scrollbar px-1">
                 {MUSCLES.map((m) => (
                   <button
                     key={m}
                     onClick={() => {
                       setMuscle(m);
-                      setExercise(EXERCISE_MAP[m][0]);
+                      setExercise(EXERCISE_MAP[m]?.[0] ?? "");
                     }}
-                    className={`block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-sky-500/10 ${
-                      m === muscle ? "text-sky-100" : "text-sky-100/90"
+                    className={`block w-full rounded-xl px-3.5 py-2.5 text-left text-[15px] transition hover:bg-sky-500/15 ${
+                      m === muscle
+                        ? "bg-sky-500/20 ring-1 ring-sky-500/30 text-sky-100"
+                        : "text-sky-100/90"
                     }`}
                   >
                     {m}
@@ -213,7 +347,7 @@ export default function FitnolsApp() {
             </AttachedDropdown>
           </div>
 
-          {/* Exercise */}
+          {/* EXERCISE card */}
           <div
             className="md:col-span-8 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4"
             style={{ zIndex: zLift.exercise ? 1000 : 1 }}
@@ -223,13 +357,15 @@ export default function FitnolsApp() {
               buttonContent={<span className="truncate">{exercise}</span>}
               onOpenChange={setLift("exercise")}
             >
-              <div className="max-h-56 overflow-auto custom-scrollbar">
+              <div className="max-h-[320px] overflow-auto custom-scrollbar px-1">
                 {(EXERCISE_MAP[muscle] || []).map((ex) => (
                   <button
                     key={ex}
                     onClick={() => setExercise(ex)}
-                    className={`block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-sky-500/10 ${
-                      ex === exercise ? "text-sky-100" : "text-sky-100/90"
+                    className={`block w-full rounded-xl px-3.5 py-2.5 text-left text-[15px] transition hover:bg-sky-500/15 ${
+                      ex === exercise
+                        ? "bg-sky-500/20 ring-1 ring-sky-500/30 text-sky-100"
+                        : "text-sky-100/90"
                     }`}
                   >
                     {ex}
@@ -237,25 +373,98 @@ export default function FitnolsApp() {
                 ))}
               </div>
             </AttachedDropdown>
+
+            {/* Live Logging controls */}
+            {liveMode && (
+              <div className="mt-3 flex items-center gap-3">
+                <div className="text-sm text-sky-300/90">Reps</div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() =>
+                        setLiveReps((v) => Math.max(0, Number(v) - 1))
+                      }
+                      className="h-9 w-9 rounded-xl border border-sky-800/60 bg-slate-900/70 text-lg text-sky-200"
+                    >
+                      −
+                    </button>
+                    <input
+                      value={liveReps}
+                      onChange={(e) =>
+                        setLiveReps(e.target.value.replace(/[^0-9.]/g, ""))
+                      }
+                      onBlur={(e) => {
+                        const n = parseFloat(e.target.value);
+                        setLiveReps(Number.isNaN(n) ? 0 : n);
+                      }}
+                      className="w-20 bg-transparent text-center text-base text-sky-100 border border-sky-700/60 rounded-lg py-1"
+                      inputMode="numeric"
+                    />
+                    <button
+                      onClick={() => setLiveReps((v) => Number(v) + 1)}
+                      className="h-9 w-9 rounded-xl border border-sky-800/60 bg-slate-900/70 text-lg text-sky-200"
+                    >
+                      ＋
+                    </button>
+                    <button
+                      onClick={addLiveRep}
+                      className="ml-2 rounded-xl border border-emerald-600/60 bg-emerald-700/30 px-3 py-2 text-sm text-emerald-100 shadow-[0_0_12px_rgba(16,185,129,.35)] hover:bg-emerald-700/40"
+                    >
+                      ✓ Add Set
+                    </button>
+                    <button
+                      onClick={addToLog}
+                      className="ml-2 rounded-xl border border-sky-600/60 bg-sky-700/30 px-3 py-2 text-sm text-sky-100 shadow-[0_0_12px_rgba(59,130,246,.35)] hover:bg-sky-700/40"
+                    >
+                      ⇩ Add to Log
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Live progression line */}
+            <div className="mt-2 text-sm text-sky-200/90">
+              {exercise ? (
+                <>
+                  <span className="text-sky-300/80">{exercise}:</span>
+                  <span className="ml-2 text-sky-100">
+                    {(liveLog[exercise] ?? []).join(", ")}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sky-400/70">
+                  Select an exercise to start live logging.
+                </span>
+              )}
+            </div>
           </div>
         </section>
 
-        {/* row 2 */}
         <section className="grid gap-4 md:grid-cols-12">
-          {/* Sets */}
-          <div className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4">
+          {/* SETS */}
+          <div
+            className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4"
+            style={{ zIndex: zLift.sets ? 1000 : 1 }}
+          >
             <div className="mb-2 text-sm text-sky-300/90">Sets</div>
             <Stepper value={sets} setValue={setSets} step={2.5} />
           </div>
 
-          {/* Reps */}
-          <div className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4">
+          {/* REPS */}
+          <div
+            className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4"
+            style={{ zIndex: zLift.reps ? 1000 : 1 }}
+          >
             <div className="mb-2 text-sm text-sky-300/90">Reps</div>
             <Stepper value={reps} setValue={setReps} step={2.5} />
           </div>
 
-          {/* Weight */}
-          <div className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4">
+          {/* WEIGHT */}
+          <div
+            className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4"
+            style={{ zIndex: zLift.weight ? 1000 : 1 }}
+          >
             <div className="mb-2 text-sm text-sky-300/90">Weight</div>
             <Stepper
               value={weight}
@@ -266,7 +475,7 @@ export default function FitnolsApp() {
           </div>
         </section>
 
-        {/* log full width */}
+        {/* LOG (full width) */}
         <section className="rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4">
           <h3 className="mb-3 text-base font-semibold tracking-wide text-sky-200/90">
             Today's Log
