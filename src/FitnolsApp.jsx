@@ -1,202 +1,139 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
-// FITNOLS — Cyberpunk Workout Tracker (React, JS)
-// Updates in this version:
-// 1) Glowing + buttons beside each category label
-// 2) Layout: Muscle row full-width horizontally, Exercise row beneath
-// 3) Deletable chips via long-press (hold ~600ms to reveal delete dot)
-// 4) Sections visually separated and reactive
-// 5) Calendar with translucent blue fill for days with entries
-// 6) Progression line (last 14 days streak overview)
-
-// ---- Utilities ----
-const gradientClass =
-  "relative inline-flex items-center justify-center rounded-xl px-3.5 py-2 text-sm font-semibold tracking-wide text-sky-100 " +
-  "before:absolute before:inset-0 before:rounded-xl before:p-[1.5px] before:[background:linear-gradient(135deg,#06183A,rgba(0,148,255,.8),#06183A)] before:[mask:linear-gradient(#000,#000)_content-box,linear-gradient(#000,#000)] before:[mask-composite:exclude] before:content-[''] " +
-  "bg-[radial-gradient(120%_120%_at_50%_-20%,#0b1222,#050b16)] hover:shadow-[0_0_20px_rgba(0,140,255,.35)]";
-
-const chipBase =
-  "relative rounded-xl border border-sky-800/60 bg-slate-900/60 px-3 py-1 text-[13px] text-sky-200/90 shadow-[inset_0_0_0_1px_rgba(6,24,58,.5)] hover:bg-slate-900/80 transition select-none";
-
-const panelClass =
-  "rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4 backdrop-blur-sm";
-
+/* -------------------- utils -------------------- */
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
-function dateKey(d) {
-  return d.toISOString().slice(0, 10);
-}
 
-// ---- Add (+) Button ----
-function AddButton({ onClick, title = "Add" }) {
+/* ------------------ constants ------------------ */
+const MUSCLES = [
+  "Chest",
+  "Back",
+  "Legs",
+  "Shoulders",
+  "Arms",
+  "Core",
+  "Full Body",
+];
+const EXERCISE_MAP = {
+  Chest: ["Bench Press", "Incline DB Press", "Cable Fly"],
+  Back: ["Deadlift", "Lat Pulldown", "Row"],
+  Legs: ["Squat", "Leg Press", "Leg Curl", "Calf Raise"],
+  Shoulders: ["Overhead Press", "Lateral Raise", "Rear Delt Fly"],
+  Arms: ["Barbell Curl", "Tricep Pushdown", "Hammer Curl"],
+  Core: ["Hanging Leg Raise", "Plank", "Cable Crunch"],
+  "Full Body": ["Clean & Press", "Farmer Carry", "Kettlebell Swing"],
+};
+
+/* -------- attached dropdown (anchored) -------- */
+function AttachedDropdown({
+  label,
+  buttonContent,
+  children,
+  align = "left",
+  onOpenChange,
+}) {
+  const [open, setOpen] = useState(false);
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    onOpenChange && onOpenChange(next);
+  }
+  function close() {
+    setOpen(false);
+    onOpenChange && onOpenChange(false);
+  }
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="ml-2 inline-flex h-7 w-7 items-center justify-center rounded-lg border border-sky-500/40 bg-white/5 backdrop-blur shadow-[0_0_12px_rgba(0,160,255,.35)] hover:shadow-[0_0_18px_rgba(0,160,255,.5)] transition"
-      aria-label={title}
-    >
-      <span className="text-sky-300 text-lg leading-none">+</span>
-    </button>
+    <div className="relative z-10">
+      <button
+        onClick={toggle}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-sky-700/70 bg-slate-900/70 px-4 py-2.5 text-[15px] text-sky-100 hover:bg-slate-900/80"
+      >
+        <span className="truncate">{buttonContent ?? label}</span>
+        <span className={`transition ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+
+      {open && (
+        <div
+          className={`absolute ${
+            align === "right" ? "right-0" : "left-0"
+          } top-full mt-2 min-w-[240px] rounded-xl border border-sky-900/60 bg-slate-950/95 p-3 shadow-[0_0_40px_rgba(0,160,255,.45)] z-50 custom-scrollbar`}
+          onMouseLeave={close}
+        >
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 
-// ---- LongPress Deletable Chip ----
-function DeletableChip({ label, active = false, onClick, onDelete }) {
-  const [showDel, setShowDel] = useState(false);
-  const timerRef = useRef(null);
+/* ------------- stepper (±2.5, editable) ------------- */
+function Stepper({ value, setValue, step = 2.5, suffix = "" }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
 
-  function down() {
-    timerRef.current = setTimeout(() => setShowDel(true), 600);
-  }
-  function up() {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }
+  const commit = () => {
+    const n = parseFloat(text);
+    if (!Number.isNaN(n)) setValue(n);
+    else setText(String(value));
+  };
+
+  const inc = () => setValue((v) => +((v ?? 0) + step).toFixed(2));
+  const dec = () => setValue((v) => +((v ?? 0) - step).toFixed(2));
+
   return (
-    <div className="relative">
-      {showDel && (
-        <button
-          onClick={onDelete}
-          className="absolute -left-2 -top-2 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full border border-sky-600/60 bg-sky-900/80 text-sky-200 text-[11px] shadow-[0_0_10px_rgba(0,140,255,.35)]"
-          aria-label={`Delete ${label}`}
-          title="Delete"
-        >
-          ×
-        </button>
-      )}
+    <div className="flex items-center gap-3">
       <button
-        onMouseDown={down}
-        onMouseUp={up}
-        onMouseLeave={up}
-        onTouchStart={down}
-        onTouchEnd={up}
-        onClick={onClick}
-        className={`${chipBase} ${
-          active ? "ring-1 ring-sky-400/60 bg-slate-950/60" : ""
-        }`}
+        onClick={dec}
+        className="h-10 w-10 rounded-xl border border-sky-800/60 bg-slate-900/70 text-xl text-sky-200 hover:bg-slate-900"
+        aria-label="decrease"
       >
-        {label}
+        −
+      </button>
+
+      <div className="flex items-center gap-2 rounded-xl border border-sky-700/60 bg-slate-900/70 px-3 py-2">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          className="w-24 bg-transparent text-center text-lg text-sky-100 focus:outline-none"
+          inputMode="decimal"
+        />
+        {suffix ? <span className="text-sky-300/80">{suffix}</span> : null}
+      </div>
+
+      <button
+        onClick={inc}
+        className="h-10 w-10 rounded-xl border border-sky-800/60 bg-slate-900/70 text-xl text-sky-200 hover:bg-slate-900"
+        aria-label="increase"
+      >
+        ＋
       </button>
     </div>
   );
 }
 
-// ---- Calendar (current month) ----
-function MonthCalendar({ filledDates = new Set() }) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0-based
-  const first = new Date(year, month, 1);
-  const startDay = first.getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < startDay; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
-
-  const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  return (
-    <div className="rounded-2xl border border-sky-900/50 bg-slate-950/30 p-4">
-      <div className="mb-3 flex items-center justify-between text-sky-300/80 text-sm">
-        <div>
-          {now.toLocaleString(undefined, { month: "long", year: "numeric" })}
-        </div>
-        <div className="flex gap-2 text-[12px]">
-          <span className="inline-block h-3 w-3 rounded-sm bg-sky-500/30" />{" "}
-          <span>worked out</span>
-        </div>
-      </div>
-      <div className="grid grid-cols-7 gap-2 text-center text-[12px] text-sky-300/80 mb-2">
-        {weekday.map((w) => (
-          <div key={w}>{w}</div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 gap-2">
-        {cells.map((d, i) => {
-          if (!d) return <div key={i} className="h-9" />;
-          const k = dateKey(d);
-          const filled = filledDates.has(k);
-          return (
-            <div
-              key={i}
-              className={`h-9 rounded-md border border-sky-900/50 flex items-center justify-center text-sm ${
-                filled ? "bg-sky-500/20 text-sky-100" : "text-sky-300/80"
-              }`}
-            >
-              {d.getDate()}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ---- Progression Line (last 14 days) ----
-function ProgressLine({ filledDates = new Set(), days = 14 }) {
-  const cells = [];
-  const base = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(base);
-    d.setDate(base.getDate() - i);
-    const k = dateKey(d);
-    cells.push({ k, filled: filledDates.has(k) });
-  }
-  return (
-    <div className="rounded-2xl border border-sky-900/50 bg-slate-950/30 p-4">
-      <div className="mb-2 text-sm text-sky-300/80">
-        Progress (last {days} days)
-      </div>
-      <div className="flex gap-1">
-        {cells.map(({ k, filled }) => (
-          <div
-            key={k}
-            className={`h-3 w-5 rounded-sm border border-sky-900/60 ${
-              filled ? "bg-sky-500/40" : "bg-slate-900/40"
-            }`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ---- Main App ----
+/* -------------------- app -------------------- */
 export default function FitnolsApp() {
-  // Editable libraries
-  const [muscles, setMuscles] = useState([
-    "Chest",
-    "Back",
-    "Legs",
-    "Shoulders",
-    "Arms",
-    "Core",
-    "Full Body",
-  ]);
-  const [exerciseMap, setExerciseMap] = useState({
-    Chest: ["Bench Press", "Incline DB Press", "Cable Fly"],
-    Back: ["Deadlift", "Lat Pulldown", "Row"],
-    Legs: ["Squat", "Leg Press", "Leg Curl", "Calf Raise"],
-    Shoulders: ["OHP", "Lateral Raise", "Rear Delt Fly"],
-    Arms: ["Barbell Curl", "Tricep Pushdown", "Hammer Curl"],
-    Core: ["Hanging Leg Raise", "Plank", "Cable Crunch"],
-    "Full Body": ["Clean & Press", "Farmer Carry", "Kettlebell Swing"],
-  });
-
-  // Selection + inputs
-  const [unit, setUnit] = useState("kg");
+  // selections
   const [muscle, setMuscle] = useState("Legs");
-  const [exercise, setExercise] = useState(exerciseMap["Legs"][0]);
+  const [exercise, setExercise] = useState(EXERCISE_MAP["Legs"][0]);
   const [sets, setSets] = useState(3);
   const [reps, setReps] = useState(10);
   const [weight, setWeight] = useState(60);
-  const [notes, setNotes] = useState("");
 
-  // History
-  const [history, setHistory] = useState([
+  // raise z-index of the card while its dropdown is open
+  const [zLift, setZLift] = useState({});
+  const setLift = (key) => (open) => setZLift((p) => ({ ...p, [key]: open }));
+
+  // sample history
+  const todayKey = useMemo(today, []);
+  const [history] = useState(() => [
     {
-      date: today(),
+      date: todayKey,
       muscle: "Legs",
       exercise: "Squat",
       sets: 3,
@@ -206,7 +143,7 @@ export default function FitnolsApp() {
       notes: "Strong",
     },
     {
-      date: today(),
+      date: todayKey,
       muscle: "Back",
       exercise: "Lat Pulldown",
       sets: 4,
@@ -217,207 +154,126 @@ export default function FitnolsApp() {
     },
   ]);
 
-  // Filled dates set for calendar/progression
-  const filledDates = new Set(history.map((h) => h.date));
-
-  // Helpers for changing numeric values
-  const addSet = (d) => setSets(Math.max(1, sets + d));
-  const addReps = (d) => setReps(Math.max(1, reps + d));
-  const addWeight = (d) => setWeight(Math.max(0, weight + d));
-
-  function save() {
-    setHistory([
-      { date: today(), muscle, exercise, sets, reps, weight, unit, notes },
-      ...history,
-    ]);
-    setSets(3);
-    setReps(10);
-    setWeight(60);
-    setNotes("");
-  }
-
-  // Add via plus buttons (simple prompts for now)
-  function addMuscle() {
-    const name = prompt("New muscle group name?");
-    if (!name) return;
-    if (muscles.includes(name)) return alert("Already exists");
-    setMuscles([...muscles, name]);
-    setExerciseMap({ ...exerciseMap, [name]: ["New Exercise"] });
-  }
-  function addExercise() {
-    const name = prompt(`New exercise for ${muscle}?`);
-    if (!name) return;
-    setExerciseMap({
-      ...exerciseMap,
-      [muscle]: [...exerciseMap[muscle], name],
-    });
-  }
-
-  function deleteMuscle(name) {
-    if (muscles.length <= 1) return;
-    const newMuscles = muscles.filter((m) => m !== name);
-    const { [name]: _, ...rest } = exerciseMap;
-    setMuscles(newMuscles);
-    setExerciseMap(rest);
-    if (muscle === name) {
-      const m0 = newMuscles[0];
-      setMuscle(m0);
-      setExercise(rest[m0][0]);
-    }
-  }
-  function deleteExercise(name) {
-    const list = exerciseMap[muscle].filter((e) => e !== name);
-    if (list.length === 0) return; // keep at least one
-    const map = { ...exerciseMap, [muscle]: list };
-    setExerciseMap(map);
-    if (exercise === name) setExercise(list[0]);
-  }
-
   return (
     <div className="min-h-screen w-full bg-[radial-gradient(120%_120%_at_50%_-20%,#0b1222,#050b16)] text-slate-100 antialiased">
-      <header className="mx-auto w-full max-w-4xl px-4 pt-8 pb-4">
-        <div className="flex items-center justify-between">
-          <div className="text-xs uppercase tracking-[0.35em] text-sky-300/70">
-            Cyber • Fitness
-          </div>
-          <div className="text-xs text-sky-300/70">v0.2 preview</div>
-        </div>
-        <h1 className="mt-2 text-center text-3xl font-black tracking-wide text-sky-200 drop-shadow-[0_0_20px_rgba(0,140,255,.25)]">
+      {/* neon scrollbar for dropdowns */}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: linear-gradient(to bottom, #00aaff, #0066ff);
+          border-radius: 9999px;
+          box-shadow: 0 0 15px #00aaff;
+          animation: pulseGlow 2s infinite;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(to bottom, #33bbff, #0099ff);
+        }
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 8px #00aaff; }
+          50% { box-shadow: 0 0 18px #00ccff; }
+        }
+      `}</style>
+
+      <header className="text-center py-6">
+        <h1 className="text-4xl font-extrabold text-sky-200 drop-shadow-[0_0_25px_rgba(0,140,255,.4)]">
           FITNOLS
         </h1>
       </header>
 
-      <main className="mx-auto w-full max-w-4xl px-4 pb-24 space-y-5">
-        {/* Progress & Calendar */}
-        <div className="grid gap-4 md:grid-cols-2">
-          <ProgressLine filledDates={filledDates} days={14} />
-          <MonthCalendar filledDates={filledDates} />
-        </div>
-
-        {/* MUSCLE */}
-        <section className={panelClass}>
-          <div className="mb-3 flex items-center justify-between">
-            <label className="text-sm text-sky-200/90">Muscle Group</label>
-            <AddButton onClick={addMuscle} title="Add muscle" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {muscles.map((m) => (
-              <DeletableChip
-                key={m}
-                label={m}
-                active={m === muscle}
-                onClick={() => {
-                  setMuscle(m);
-                  setExercise(exerciseMap[m][0]);
-                }}
-                onDelete={() => deleteMuscle(m)}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* EXERCISE */}
-        <section className={panelClass}>
-          <div className="mb-3 flex items-center justify-between">
-            <label className="text-sm text-sky-200/90">Exercise</label>
-            <AddButton onClick={addExercise} title="Add exercise" />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {exerciseMap[muscle].map((ex) => (
-              <DeletableChip
-                key={ex}
-                label={ex}
-                active={ex === exercise}
-                onClick={() => setExercise(ex)}
-                onDelete={() => deleteExercise(ex)}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* SETS & REPS & WEIGHT */}
-        <section className="grid gap-4 md:grid-cols-2">
-          <div className={panelClass}>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-sm text-sky-200/90">Sets</label>
-              <AddButton onClick={() => addSet(1)} title="Add 1 set" />
-            </div>
-            <NumberPicker
-              label="Sets"
-              value={sets}
-              onDec={() => addSet(-1)}
-              onInc={() => addSet(1)}
-            />
-          </div>
-
-          <div className={panelClass}>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-sm text-sky-200/90">Reps</label>
-              <AddButton onClick={() => addReps(1)} title="Add 1 rep" />
-            </div>
-            <NumberPicker
-              label="Reps"
-              value={reps}
-              onDec={() => addReps(-1)}
-              onInc={() => addReps(1)}
-            />
-          </div>
-
-          <div className={panelClass}>
-            <div className="mb-2 flex items-center justify-between">
-              <label className="text-sm text-sky-200/90">Weight</label>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setUnit("kg")}
-                  className={`${chipBase} ${
-                    unit === "kg" ? "ring-1 ring-sky-400/60" : ""
-                  }`}
-                >
-                  kg
-                </button>
-                <button
-                  onClick={() => setUnit("lb")}
-                  className={`${chipBase} ${
-                    unit === "lb" ? "ring-1 ring-sky-400/60" : ""
-                  }`}
-                >
-                  lb
-                </button>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-20 space-y-4">
+        {/* row 1 */}
+        <section className="grid gap-4 md:grid-cols-12">
+          {/* Muscle */}
+          <div
+            className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4"
+            style={{ zIndex: zLift.muscle ? 1000 : 1 }}
+          >
+            <div className="mb-2 text-sm text-sky-300/90">Muscle Group</div>
+            <AttachedDropdown
+              buttonContent={<span>{muscle}</span>}
+              onOpenChange={setLift("muscle")}
+            >
+              <div className="max-h-56 overflow-auto custom-scrollbar">
+                {MUSCLES.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => {
+                      setMuscle(m);
+                      setExercise(EXERCISE_MAP[m][0]);
+                    }}
+                    className={`block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-sky-500/10 ${
+                      m === muscle ? "text-sky-100" : "text-sky-100/90"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
               </div>
-            </div>
-            <NumberPicker
-              label={`Weight (${unit})`}
-              value={weight}
-              step={unit === "kg" ? 2.5 : 5}
-              onDec={() => addWeight(-(unit === "kg" ? 2.5 : 5))}
-              onInc={() => addWeight(unit === "kg" ? 2.5 : 5)}
-            />
+            </AttachedDropdown>
           </div>
 
-          <div className={panelClass}>
-            <label className="mb-2 block text-sm text-sky-200/90">Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Felt strong today…"
-              className="w-full rounded-2xl border border-sky-900/50 bg-slate-950/50 px-4 py-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/60"
-            ></textarea>
+          {/* Exercise */}
+          <div
+            className="md:col-span-8 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4"
+            style={{ zIndex: zLift.exercise ? 1000 : 1 }}
+          >
+            <div className="mb-2 text-sm text-sky-300/90">Exercise</div>
+            <AttachedDropdown
+              buttonContent={<span className="truncate">{exercise}</span>}
+              onOpenChange={setLift("exercise")}
+            >
+              <div className="max-h-56 overflow-auto custom-scrollbar">
+                {(EXERCISE_MAP[muscle] || []).map((ex) => (
+                  <button
+                    key={ex}
+                    onClick={() => setExercise(ex)}
+                    className={`block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-sky-500/10 ${
+                      ex === exercise ? "text-sky-100" : "text-sky-100/90"
+                    }`}
+                  >
+                    {ex}
+                  </button>
+                ))}
+              </div>
+            </AttachedDropdown>
           </div>
         </section>
 
-        {/* Actions & Log */}
-        <section className={panelClass}>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold tracking-wide text-sky-200/90">
-              Today\'s Log
-            </h3>
-            <button className={gradientClass} onClick={save}>
-              SAVE SET
-            </button>
+        {/* row 2 */}
+        <section className="grid gap-4 md:grid-cols-12">
+          {/* Sets */}
+          <div className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4">
+            <div className="mb-2 text-sm text-sky-300/90">Sets</div>
+            <Stepper value={sets} setValue={setSets} step={2.5} />
           </div>
-          <div className="overflow-hidden rounded-2xl border border-sky-900/50">
+
+          {/* Reps */}
+          <div className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4">
+            <div className="mb-2 text-sm text-sky-300/90">Reps</div>
+            <Stepper value={reps} setValue={setReps} step={2.5} />
+          </div>
+
+          {/* Weight */}
+          <div className="md:col-span-4 relative overflow-visible rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4">
+            <div className="mb-2 text-sm text-sky-300/90">Weight</div>
+            <Stepper
+              value={weight}
+              setValue={setWeight}
+              step={2.5}
+              suffix="kg"
+            />
+          </div>
+        </section>
+
+        {/* log full width */}
+        <section className="rounded-2xl border border-sky-900/50 bg-slate-950/40 p-4">
+          <h3 className="mb-3 text-base font-semibold tracking-wide text-sky-200/90">
+            Today's Log
+          </h3>
+          <div className="overflow-hidden rounded-xl border border-sky-900/50">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-950/50 text-sky-300/80">
+              <thead className="bg-slate-950/60 text-sky-300/80">
                 <tr>
                   <th className="px-4 py-3">Exercise</th>
                   <th className="px-4 py-3">Sets</th>
@@ -428,9 +284,11 @@ export default function FitnolsApp() {
               </thead>
               <tbody className="divide-y divide-sky-900/40">
                 {history
-                  .filter((h) => h.date === today())
-                  .map((row, i) => (
-                    <tr key={i}>
+                  .filter((h) => h.date === todayKey)
+                  .map((row) => (
+                    <tr
+                      key={`${row.date}-${row.exercise}-${row.sets}-${row.reps}-${row.weight}`}
+                    >
                       <td className="px-4 py-2.5 text-sky-100/90">
                         {row.exercise}
                       </td>
@@ -439,12 +297,7 @@ export default function FitnolsApp() {
                       <td className="px-4 py-2.5">
                         {row.weight} {row.unit}
                       </td>
-                      <td
-                        className="px-4 py-2.5 max-w-[220px] truncate"
-                        title={row.notes}
-                      >
-                        {row.notes}
-                      </td>
+                      <td className="px-4 py-2.5">{row.notes}</td>
                     </tr>
                   ))}
               </tbody>
@@ -452,25 +305,6 @@ export default function FitnolsApp() {
           </div>
         </section>
       </main>
-    </div>
-  );
-}
-
-function NumberPicker({ label, value, onDec, onInc, step = 1 }) {
-  return (
-    <div>
-      <div className="mb-2 text-xs text-sky-300/80">{label}</div>
-      <div className="flex items-center gap-2">
-        <button onClick={onDec} className={chipBase}>
-          - {step}
-        </button>
-        <div className="min-w-[64px] rounded-xl border border-sky-900/50 bg-slate-950/50 px-3 py-2 text-center text-sky-100/90">
-          {value}
-        </div>
-        <button onClick={onInc} className={chipBase}>
-          + {step}
-        </button>
-      </div>
     </div>
   );
 }
